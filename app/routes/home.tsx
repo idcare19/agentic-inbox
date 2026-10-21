@@ -140,7 +140,7 @@ export default function HomeRoute() {
 	const isLoading = !configData;
 
 	return (
-		<div className="min-h-screen bg-kumo-recessed">
+		<div className="workspace-home min-h-screen bg-kumo-recessed">
 			<div className="mx-auto max-w-2xl px-4 py-8 md:px-6 md:py-16">
 				<div className="mb-8">
 					<div className="flex items-center justify-between">
@@ -167,7 +167,7 @@ export default function HomeRoute() {
 						<Loader size="lg" />
 					</div>
 				) : accounts.length > 0 ? (
-					<div className="rounded-xl border border-kumo-line bg-kumo-base overflow-hidden">
+					<div className="surface-card rounded-xl border border-kumo-line bg-kumo-base overflow-hidden">
 						{accounts.map((account, idx) => (
 							<RouterLink
 								key={account.id}

@@ -56,7 +56,7 @@ export default function Header() {
 	const isSettingsActive = location.pathname.includes("/settings");
 
 	return (
-		<header className="flex items-center gap-2 px-3 py-2.5 bg-kumo-base border-b border-kumo-line sticky top-0 z-10 md:px-5 md:gap-4">
+		<header className="workspace-header flex items-center gap-2 px-3 py-2.5 bg-kumo-base border-b border-kumo-line sticky top-0 z-10 md:px-5 md:gap-4">
 			{/* Hamburger menu - mobile only */}
 			<Button
 				variant="ghost"
@@ -74,7 +74,7 @@ export default function Header() {
 					isSearchExpanded ? "flex" : "hidden md:flex"
 				}`}
 			>
-				<div className="flex-1 relative flex items-center">
+				<div className="workspace-search flex-1 relative flex items-center">
 					<Input
 						className="w-full"
 						aria-label="Search emails"

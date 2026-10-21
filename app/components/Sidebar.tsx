@@ -121,7 +121,7 @@ export default function Sidebar() {
 	};
 
 	return (
-		<aside className="h-full w-64 bg-kumo-recessed flex flex-col shrink-0 border-r border-kumo-line">
+		<aside className="workspace-sidebar h-full w-64 flex flex-col shrink-0 border-r border-kumo-line">
 			{/* Back + identity */}
 			<div className="px-4 pt-4 pb-1">
 				<button
@@ -135,7 +135,11 @@ export default function Sidebar() {
 					<CaretLeftIcon size={14} />
 					<span>Mailboxes</span>
 				</button>
-				<div className="px-1">
+				<div className="px-1 pt-1">
+					<div className="flex items-center gap-2 mb-3">
+						<div className="workspace-avatar flex h-8 w-8 items-center justify-center rounded-xl text-sm font-bold">A</div>
+						<div className="text-sm font-semibold tracking-tight text-kumo-default">Agentic Inbox</div>
+					</div>
 					<div className="text-base font-semibold text-kumo-default truncate">
 						{displayName}
 					</div>

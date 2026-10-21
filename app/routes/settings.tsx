@@ -65,12 +65,12 @@ export default function SettingsRoute() {
 	const isCustomPrompt = agentPrompt.trim().length > 0;
 
 	return (
-		<div className="max-w-2xl px-4 py-4 md:px-8 md:py-6 h-full overflow-y-auto">
+		<div className="workspace-settings max-w-2xl px-4 py-4 md:px-8 md:py-6 h-full overflow-y-auto">
 			<h1 className="text-lg font-semibold text-kumo-default mb-6">Settings</h1>
 
 			<div className="space-y-6">
 				{/* Account */}
-				<div className="rounded-lg border border-kumo-line bg-kumo-base p-5">
+				<div className="surface-card rounded-lg border border-kumo-line bg-kumo-base p-5">
 					<div className="text-sm font-medium text-kumo-default mb-4">
 						Account
 					</div>
@@ -85,7 +85,7 @@ export default function SettingsRoute() {
 				</div>
 
 				{/* Agent System Prompt */}
-				<div className="rounded-lg border border-kumo-line bg-kumo-base p-5">
+				<div className="surface-card rounded-lg border border-kumo-line bg-kumo-base p-5">
 					<div className="flex items-center justify-between mb-4">
 						<div className="flex items-center gap-2">
 							<RobotIcon size={16} weight="duotone" className="text-kumo-subtle" />

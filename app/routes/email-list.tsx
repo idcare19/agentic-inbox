@@ -328,9 +328,9 @@ export default function EmailListRoute() {
 												handleRowClick(email);
 											}
 										}}
-										className={`group flex items-center gap-3 w-full text-left cursor-pointer transition-colors border-b border-kumo-line px-4 py-2.5 md:px-6 md:py-3 ${
+										className={`workspace-row group flex items-center gap-3 w-full text-left cursor-pointer transition-colors border-b border-kumo-line px-4 py-2.5 md:px-6 md:py-3 ${
 											isPanelOpen ? "md:px-4 md:py-2.5" : ""
-										} ${isSelected ? "bg-kumo-tint" : "hover:bg-kumo-tint"}`}
+										} ${isSelected ? "is-selected" : ""}`}
 									>
 										{/* Unread dot */}
 										<div className="w-2.5 shrink-0 flex justify-center">
@@ -342,7 +342,8 @@ export default function EmailListRoute() {
 										{/* Star */}
 										<button
 											type="button"
-											className="shrink-0 p-0.5 bg-transparent border-0 cursor-pointer"
+											aria-label={email.starred ? "Unstar email" : "Star email"}
+											className="email-star shrink-0 p-0.5 bg-transparent border-0 cursor-pointer"
 											onClick={(e) => {
 												e.stopPropagation();
 												toggleStar(e, email);

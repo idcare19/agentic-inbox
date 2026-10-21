@@ -39,7 +39,7 @@ export default function MailboxRoute() {
 	}, [mailboxId, closeComposeModal, closePanel, closeSidebar]);
 
 	return (
-		<div className="flex h-screen overflow-hidden">
+		<div className="workspace-shell flex h-screen overflow-hidden">
 			{/* Mobile sidebar overlay backdrop */}
 			{isSidebarOpen && (
 				<div
@@ -71,7 +71,7 @@ export default function MailboxRoute() {
 
 			{/* Agent + MCP sidebar -- togglable on desktop */}
 			{isAgentPanelOpen && (
-				<div className="hidden lg:flex w-[380px] shrink-0 border-l border-kumo-line flex-col bg-kumo-base overflow-hidden">
+				<div className="agent-panel-enter hidden lg:flex w-[360px] shrink-0 border-l border-kumo-line flex-col bg-kumo-base overflow-hidden">
 					<AgentSidebar />
 				</div>
 			)}

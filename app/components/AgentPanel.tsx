@@ -343,7 +343,7 @@ function AgentChatConnected({
 	];
 
 	return (
-		<div className="flex flex-col h-full">
+		<div className="ai-surface flex flex-col h-full">
 			{/* Header */}
 			<div className="flex items-center justify-between px-3 py-1.5 border-b border-kumo-line shrink-0">
 				<div className="flex items-center gap-2">

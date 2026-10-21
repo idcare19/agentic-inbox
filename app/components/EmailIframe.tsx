@@ -128,6 +128,13 @@ pre {
 	overflow-x: auto;
 	font-size: 13px;
 }
+@media (prefers-color-scheme: dark) {
+html { background: #1b1e26; color-scheme: dark; }
+body { color: #edf0f5; background: #1b1e26; }
+a { color: #aeb3ff; }
+blockquote { border-color: #4b5262; color: #aab2c1; }
+pre { background: #252a34; }
+}
 table { border-collapse: collapse; max-width: 100%; }
 td, th { padding: 4px 8px; }
 p { margin: 4px 0; }

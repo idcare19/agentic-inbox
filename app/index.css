@@ -67,6 +67,7 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible {
 .email-star:active { transform: scale(.92); }
 .workspace-reader { background: var(--inbox-surface); animation: panel-in var(--motion-panel) var(--motion-ease) both; }
 .workspace-reader > * { animation: content-in 220ms var(--motion-ease) both; }
+.email-reading-body { max-width: 960px; width: 100%; margin: 0 auto; }
 .workspace-composer { background: var(--inbox-surface); animation: panel-in var(--motion-panel) var(--motion-ease) both; }
 .workspace-settings, .workspace-home { background: var(--inbox-bg); }
 .surface-card { background: rgba(255,255,255,.88); border: 1px solid var(--inbox-line); border-radius: 14px; box-shadow: 0 8px 24px rgba(28,37,61,.035); transition: border-color var(--motion-control) var(--motion-balanced), box-shadow var(--motion-control) var(--motion-balanced), transform var(--motion-control) var(--motion-balanced); }
@@ -75,6 +76,19 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible {
 .ai-surface { background: linear-gradient(180deg, rgba(249,249,255,.96), #fff); }
 .ai-surface textarea:focus { box-shadow: 0 0 0 3px rgba(91,92,226,.12); }
 .dialog-surface { border: 1px solid var(--inbox-line); box-shadow: 0 24px 70px rgba(20,27,48,.18); }
+
+@media (prefers-color-scheme: dark) {
+  :root { --inbox-bg: #14161c; --inbox-surface: #1b1e26; --inbox-line: #2b303b; --inbox-muted: #9aa3b5; --inbox-ink: #f3f5f8; --inbox-accent: #9da2ff; --inbox-accent-soft: #292b4a; }
+  body { background: var(--inbox-bg); color: var(--inbox-ink); }
+  .workspace-sidebar, .workspace-header { background: rgba(24,27,35,.92); }
+  .workspace-search { background: #20242d; }
+  .workspace-search:focus-within { background: #1b1e26; border-color: #5e63b8; }
+  .workspace-row:hover { background: #222630; }
+  .surface-card { background: rgba(27,30,38,.94); border-color: var(--inbox-line); box-shadow: 0 10px 28px rgba(0,0,0,.16); }
+  .surface-card:hover { border-color: #41485a; box-shadow: 0 14px 32px rgba(0,0,0,.22); }
+  .ai-surface { background: linear-gradient(180deg, #1b1e2a, #1b1e26); }
+  .workspace-avatar { background: #30335d; color: #c6c8ff; }
+}
 .workspace-kicker { color: var(--inbox-accent); letter-spacing: .08em; text-transform: uppercase; font-size: 10px; font-weight: 700; }
 .workspace-avatar { background: #e9eaff; color: #4d4fc7; }
 .workspace-divider { border-color: var(--inbox-line); }

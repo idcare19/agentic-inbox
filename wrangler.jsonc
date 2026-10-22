@@ -13,7 +13,7 @@
 		// Production deploys must also define POLICY_AUD and TEAM_DOMAIN.
 		// TEAM_DOMAIN may be the base Access URL or the full /cdn-cgi/access/certs URL.
 		// The worker now fails closed outside local development if Access is not configured.
-		"DOMAINS": "example.com",
+		"DOMAINS": "idcare19.me",
 		"EMAIL_ADDRESSES": []
 	},
 	"send_email": [
@@ -45,6 +45,10 @@
 			{
 				"name": "EMAIL_MCP",
 				"class_name": "EmailMCP"
+			},
+			{
+				"name": "EMAIL_CONFIG",
+				"class_name": "EmailConfigDO"
 			}
 		]
 	},
@@ -65,6 +69,12 @@
 			"tag": "v3",
 			"new_sqlite_classes": [
 				"EmailMCP"
+			]
+		},
+		{
+			"tag": "v4",
+			"new_sqlite_classes": [
+				"EmailConfigDO"
 			]
 		}
 	]

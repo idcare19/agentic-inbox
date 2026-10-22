@@ -29,6 +29,30 @@ export interface SendEmailParams {
 	headers?: Record<string, string>;
 }
 
+/** Send through Resend's HTTP API. Keep this separate from Cloudflare Email
+ * Service so existing UI/manual sending remains unchanged. */
+export async function sendResendEmail(
+	apiKey: string,
+	params: Pick<SendEmailParams, "to" | "from" | "subject" | "html" | "text" | "replyTo" | "headers">,
+): Promise<{ id: string }> {
+	const response = await fetch("https://api.resend.com/emails", {
+		method: "POST",
+		headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+		body: JSON.stringify({
+			from: typeof params.from === "string" ? params.from : `${params.from.name} <${params.from.email}>`,
+			to: Array.isArray(params.to) ? params.to : [params.to],
+			subject: params.subject,
+			...(params.html ? { html: params.html } : {}),
+			...(params.text ? { text: params.text } : {}),
+			...(params.replyTo ? { reply_to: params.replyTo } : {}),
+			...(params.headers ? { headers: params.headers } : {}),
+		}),
+	});
+	const payload = await response.json() as { id?: string; message?: string };
+	if (!response.ok || !payload.id) throw new Error(`Resend failed (${response.status}): ${payload.message || "unknown error"}`);
+	return { id: payload.id };
+}
+
 /**
  * Send an email using the Cloudflare Email Service binding.
  *

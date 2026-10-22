@@ -6,7 +6,7 @@ import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import PostalMime from "postal-mime";
 import { z } from "zod";
-import { sendEmail } from "./email-sender";
+import { sendEmail, sendResendEmail } from "./email-sender";
 import { storeAttachments, type StoredAttachment } from "./lib/attachments";
 import {
 	validateSender,
@@ -19,7 +19,9 @@ import { SendEmailRequestSchema } from "./lib/schemas";
 import { handleReplyEmail, handleForwardEmail } from "./routes/reply-forward";
 import { Folders } from "../shared/folders";
 import type { Env } from "./types";
+import type { EmailConfig } from "./types";
 import { requireMailbox, type MailboxContext } from "./lib/mailbox";
+import { stripHtmlToText, textToHtml } from "./lib/email-helpers";
 
 type AppContext = Context<MailboxContext>;
 
@@ -66,6 +68,83 @@ function boolQuery(c: AppContext, key: string): boolean | undefined {
 // -- App & middleware -----------------------------------------------
 
 const app = new Hono<MailboxContext>();
+
+function configStub(env: Env) {
+	return env.EMAIL_CONFIG.get(env.EMAIL_CONFIG.idFromName("registry"));
+}
+function requireAdmin(c: Context<{ Bindings: Env }>) {
+	const configured = c.env.ADMIN_API_TOKEN;
+	if (!configured) return true; // Cloudflare Access remains the production guard.
+	return c.req.header("authorization") === `Bearer ${configured}`;
+}
+function validateAlias(name: string) {
+	return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(name) && !name.includes("--");
+}
+
+app.get("/emails", async (c) => {
+	if (!requireAdmin(c)) return c.json({ error: "Unauthorized" }, 401);
+	return c.json(await (configStub(c.env) as any).list());
+});
+app.post("/emails", async (c) => {
+	if (!requireAdmin(c)) return c.json({ error: "Unauthorized" }, 401);
+	const body = await c.req.json() as Partial<EmailConfig> & { name?: string; forwardTo?: string[] };
+	const name = String(body.name || "").trim().toLowerCase();
+	const domain = (c.env.RESEND_DOMAIN || "idcare19.me").toLowerCase().trim();
+	if (!validateAlias(name)) return c.json({ error: "Invalid name. Use lowercase letters, numbers, and hyphens." }, 400);
+	if (!domain || domain.includes("@")) return c.json({ error: "Invalid RESEND_DOMAIN" }, 500);
+	if (!c.env.RESEND_API_KEY) return c.json({ error: "Configure RESEND_API_KEY first" }, 503);
+	const existing = await (configStub(c.env) as any).get(name);
+	if (existing) return c.json({ error: "Email alias already exists", email: existing.address }, 409);
+	const address = `${name}@${domain}`;
+	const config: EmailConfig = {
+		id: crypto.randomUUID(), address, name, senderName: String(body.senderName || name),
+		replyTemplate: String(body.replyTemplate || "Thanks for contacting us. We received your message and will get back to you shortly."),
+		forwardAddresses: (body.forwardTo || body.forwardAddresses || []).map(String).filter((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)),
+		autoReply: body.autoReply !== false, webhookUrl: body.webhookUrl, tags: Array.isArray(body.tags) ? body.tags.map(String) : [],
+		replyTo: body.replyTo || address, createdAt: new Date().toISOString(), enabled: body.enabled !== false,
+	};
+	await c.env.BUCKET.put(`mailboxes/${address}.json`, JSON.stringify({ fromName: config.senderName, forwarding: { enabled: false, email: "" }, signature: { enabled: false, text: "" }, autoReply: { enabled: config.autoReply, subject: "", message: config.replyTemplate } }));
+	await (configStub(c.env) as any).put(config);
+	return c.json(config, 201);
+});
+app.get("/emails/:name", async (c) => {
+	if (!requireAdmin(c)) return c.json({ error: "Unauthorized" }, 401);
+	const result = await (configStub(c.env) as any).get(c.req.param("name"));
+	return result ? c.json(result) : c.json({ error: "Email alias not found" }, 404);
+});
+app.put("/emails/:name", async (c) => {
+	if (!requireAdmin(c)) return c.json({ error: "Unauthorized" }, 401);
+	const current = await (configStub(c.env) as any).get(c.req.param("name")) as EmailConfig | null;
+	if (!current) return c.json({ error: "Email alias not found" }, 404);
+	const patch = await c.req.json() as Partial<EmailConfig> & { forwardTo?: string[] };
+	const updated: EmailConfig = { ...current, ...patch, name: current.name, address: current.address, id: current.id, forwardAddresses: patch.forwardTo || patch.forwardAddresses || current.forwardAddresses, tags: Array.isArray(patch.tags) ? patch.tags : current.tags };
+	await (configStub(c.env) as any).put(updated);
+	return c.json(updated);
+});
+app.get("/messages/:email", async (c) => {
+	if (!requireAdmin(c)) return c.json({ error: "Unauthorized" }, 401);
+	const email = decodeURIComponent(c.req.param("email")).toLowerCase();
+	const stub = c.env.MAILBOX.get(c.env.MAILBOX.idFromName(email));
+	return c.json(await stub.getEmails({ folder: c.req.query("status") === "replied" ? Folders.SENT : Folders.INBOX, page: 1, limit: 100 }));
+});
+app.get("/messages/:email/:id", async (c) => {
+	if (!requireAdmin(c)) return c.json({ error: "Unauthorized" }, 401);
+	const email = decodeURIComponent(c.req.param("email")).toLowerCase();
+	const message = await c.env.MAILBOX.get(c.env.MAILBOX.idFromName(email)).getEmail(c.req.param("id"));
+	return message ? c.json(message) : c.json({ error: "Message not found" }, 404);
+});
+app.post("/messages/:email/reply", async (c) => {
+	if (!requireAdmin(c)) return c.json({ error: "Unauthorized" }, 401);
+	if (!c.env.RESEND_API_KEY) return c.json({ error: "Configure RESEND_API_KEY first" }, 503);
+	const email = decodeURIComponent(c.req.param("email")).toLowerCase();
+	const config = await (configStub(c.env) as any).get(email) as EmailConfig | null;
+	if (!config || !config.enabled) return c.json({ error: "Email alias not found or disabled" }, 404);
+	const body = await c.req.json() as { to: string; subject: string; text?: string; html?: string; inReplyTo?: string };
+	if (!body.to || !body.subject || (!body.text && !body.html)) return c.json({ error: "to, subject, and text or html are required" }, 400);
+	if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(body.to)) return c.json({ error: "Invalid recipient" }, 400);
+	const result = await sendResendEmail(c.env.RESEND_API_KEY, { to: body.to, from: { email, name: config.senderName }, subject: body.subject, text: body.text, html: body.html, replyTo: config.replyTo || email, headers: body.inReplyTo ? { "In-Reply-To": body.inReplyTo, References: body.inReplyTo } : undefined });
+	return c.json({ id: result.id, status: "sent" }, 202);
+});
 app.use("/api/*", cors({
 	origin: (origin) => {
 		// Same-origin requests have no Origin header — allow them.
@@ -351,17 +430,16 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number }, env
 
 	if (!parsedEmail.to?.length || !parsedEmail.to[0].address) throw new Error("received email with empty to");
 
-	const allowedAddresses = ((env.EMAIL_ADDRESSES ?? []) as string[]).map((a) => a.toLowerCase());
 	const allRecipients = parsedEmail.to.map((t) => t.address?.toLowerCase()).filter(Boolean) as string[];
 	const ccRecipients = (parsedEmail.cc || []).map((e) => e.address?.toLowerCase()).filter(Boolean) as string[];
 	const bccRecipients = (parsedEmail.bcc || []).map((e) => e.address?.toLowerCase()).filter(Boolean) as string[];
 
-	let mailboxId: string | undefined;
-	if (allowedAddresses.length > 0) {
-		mailboxId = allRecipients.find((addr) => allowedAddresses.includes(addr));
-		if (!mailboxId) { console.log(`Ignoring email: no recipient matches EMAIL_ADDRESSES.`); return; }
-	} else { mailboxId = allRecipients[0]; }
+	// Inbound delivery is intentionally open to every sender. Select the first
+	// recipient and use the mailbox existence check below as the guard.
+	const mailboxId = allRecipients[0];
 	if (!mailboxId) throw new Error("received email with no valid recipient address");
+	const dynamicConfig = await (env.EMAIL_CONFIG.get(env.EMAIL_CONFIG.idFromName("registry")) as any).get(mailboxId) as EmailConfig | null;
+	if (dynamicConfig && !dynamicConfig.enabled) { console.log(`Ignoring disabled dynamic email ${mailboxId}`); return; }
 
 	const messageId = crypto.randomUUID();
 	if (!(await env.BUCKET.head(`mailboxes/${mailboxId}.json`))) { console.log(`Ignoring email for ${mailboxId}: mailbox does not exist`); return; }
@@ -407,6 +485,41 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number }, env
 		method: "POST", headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ mailboxId, emailId: messageId, sender: (parsedEmail.from?.address || "").toLowerCase(), subject: parsedEmail.subject || "", threadId }),
 	})).catch((e) => console.error("Auto-draft trigger failed:", (e as Error).message)));
+
+	ctx.waitUntil(sendAutoReply({ parsedEmail, mailboxId, messageId, threadId, inReplyTo, originalMessageId, stub, env, config: dynamicConfig })
+		.catch((e) => notifyAutoReplyFailure(env, mailboxId, parsedEmail, e)));
+}
+
+async function sendAutoReply(args: { parsedEmail: any; mailboxId: string; messageId: string; threadId: string; inReplyTo: string | null; originalMessageId: string | null; stub: any; env: Env; config?: EmailConfig | null }) {
+	if (!args.env.RESEND_API_KEY || !args.env.RESEND_FROM_EMAIL) throw new Error("RESEND_API_KEY and RESEND_FROM_EMAIL must be configured");
+	if (args.config && !args.config.autoReply) return;
+	const sender = args.parsedEmail.from?.address?.toLowerCase();
+	if (!sender) throw new Error("Incoming email has no sender address");
+	const input = stripHtmlToText(args.parsedEmail.html || args.parsedEmail.text || "").slice(0, 12000);
+	const template = args.config?.replyTemplate || "Write a concise, helpful email reply.";
+	const result = await args.env.AI.run("@cf/mistral/mistral-7b-instruct-v0.1", {
+		messages: [
+			{ role: "system", content: `${template}\nReturn only the reply body, without subject or commentary about being an AI.` },
+			{ role: "user", content: `From: ${sender}\nSubject: ${args.parsedEmail.subject || "(no subject)"}\n\n${input}` },
+		], max_tokens: 600, temperature: 0.4,
+	}) as { response?: string };
+	const text = result.response?.trim();
+	if (!text) throw new Error("Workers AI returned an empty reply");
+	const subject = /^re:/i.test(args.parsedEmail.subject || "") ? args.parsedEmail.subject : `Re: ${args.parsedEmail.subject || ""}`.trim();
+	const messageId = crypto.randomUUID();
+	const providerMessage = await sendResendEmail(args.env.RESEND_API_KEY, {
+		to: sender, from: args.config ? { email: args.mailboxId, name: args.config.senderName } : args.env.RESEND_FROM_EMAIL, subject, text, html: textToHtml(text), replyTo: args.config?.replyTo || args.mailboxId,
+		headers: args.originalMessageId ? { "In-Reply-To": `<${args.originalMessageId}>`, References: `<${args.originalMessageId}>` } : undefined,
+	});
+	if (args.config?.forwardAddresses.length) await sendResendEmail(args.env.RESEND_API_KEY, { to: args.config.forwardAddresses, from: { email: args.mailboxId, name: args.config.senderName }, subject: args.parsedEmail.subject || "Forwarded message", text: input, html: textToHtml(input), replyTo: sender });
+	await args.stub.createEmail(Folders.SENT, { id: messageId, subject, sender: args.mailboxId, recipient: sender, date: new Date().toISOString(), body: textToHtml(text), in_reply_to: args.inReplyTo || args.originalMessageId, email_references: null, thread_id: args.threadId, message_id: providerMessage.id }, []);
+}
+
+async function notifyAutoReplyFailure(env: Env, mailboxId: string, email: any, error: unknown) {
+	console.error("Auto-reply failed:", error);
+	if (!env.RESEND_API_KEY || !env.RESEND_FROM_EMAIL) return;
+	try { await sendResendEmail(env.RESEND_API_KEY, { to: env.ERROR_NOTIFICATION_EMAIL || "idcare19@gmail.com", from: env.RESEND_FROM_EMAIL, subject: `Auto-reply failed for ${mailboxId}`, text: `Mailbox: ${mailboxId}\nSender: ${email.from?.address || "unknown"}\nSubject: ${email.subject || "(no subject)"}\nError: ${error instanceof Error ? error.message : String(error)}` }); }
+	catch (notificationError) { console.error("Auto-reply failure notification failed:", notificationError); }
 }
 
 export { app, receiveEmail };
